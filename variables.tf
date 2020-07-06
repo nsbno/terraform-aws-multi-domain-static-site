@@ -25,6 +25,7 @@ variable "domain_name" {
 
 variable "subject_alternative_names" {
   description = "A list of maps containing domains and names of their associated hosted zones. The domains will be associated with the CloudFront distribution and ACM certificate."
+  default     = []
   type        = list(map(string))
 }
 
