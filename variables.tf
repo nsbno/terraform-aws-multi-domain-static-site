@@ -46,3 +46,9 @@ variable "certificate_validation_timeout" {
   type        = string
   default     = "45m"
 }
+
+variable "enable_directory_index" {
+  description = "(Optional) Map URIs ending in / or without a file ending to 'index.html'"
+  type        = bool
+  default     = false
+}
