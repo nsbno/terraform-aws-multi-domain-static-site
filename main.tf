@@ -138,6 +138,15 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
     min_ttl                = 0
     default_ttl            = 0
     max_ttl                = 0
+
+    dynamic "function_association" {
+      for_each = aws_cloudfront_function.default_object_mapper
+
+      content {
+        event_type   = "viewer-request"
+        function_arn = function_association.value.arn
+      }
+    }
   }
 
   price_class = "PriceClass_200"
@@ -152,6 +161,15 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
       restriction_type = "none"
     }
   }
+}
+
+resource "aws_cloudfront_function" "default_object_mapper" {
+  count   = var.enable_directory_index ? 1 : 0
+  name    = "DefaultObjectMapper"
+  runtime = "cloudfront-js-1.0"
+  comment = "Appends 'index.html' to requested URL if it ends in / or is missing file ending"
+  publish = true
+  code    = file("${path.module}/default_index_mapper.js")
 }
 
 resource "aws_route53_record" "www_a" {
