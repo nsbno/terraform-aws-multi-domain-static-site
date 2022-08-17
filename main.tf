@@ -62,17 +62,39 @@ data "aws_s3_bucket" "website_bucket" {
 resource "aws_s3_bucket" "website_bucket" {
   count  = (var.use_external_bucket == false ? 1 : 0)
   bucket = "${data.aws_caller_identity.current-account.account_id}-${var.name_prefix}-static-website-bucket"
-  acl    = "private"
+}
 
-  website {
-    index_document = "index.html"
-    error_document = "index.html"
+resource "aws_s3_bucket_acl" "website_bucket" {
+  count = (var.use_external_bucket == false ? 1 : 0)
+
+  bucket = aws_s3_bucket.website_bucket[0].bucket
+
+  acl = "private"
+}
+
+resource "aws_s3_bucket_website_configuration" "website_bucket" {
+  count = (var.use_external_bucket == false ? 1 : 0)
+
+  bucket = aws_s3_bucket.website_bucket[0].bucket
+
+  index_document {
+    suffix = "index.html"
   }
-
-  versioning {
-    enabled = var.bucket_versioning
+  error_document {
+    key = "index.html"
   }
 }
+
+resource "aws_s3_bucket_versioning" "website_bucket" {
+  count = (var.use_external_bucket == false ? 1 : 0)
+
+  bucket = aws_s3_bucket.website_bucket[0].bucket
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
 
 resource "aws_s3_bucket_policy" "website_bucket_policy" {
   bucket = data.aws_s3_bucket.website_bucket.id
