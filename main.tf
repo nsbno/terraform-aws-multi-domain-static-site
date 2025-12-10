@@ -61,15 +61,26 @@ data "aws_s3_bucket" "website_bucket" {
 
 resource "aws_s3_bucket" "website_bucket" {
   count  = (var.use_external_bucket == false ? 1 : 0)
-  bucket = "${data.aws_caller_identity.current-account.account_id}-${var.name_prefix}-static-website-bucket"
+  bucket = "${data.aws_caller_identity.current-account.account_id}-${var.service_name}-static-files"
 }
 
-resource "aws_s3_bucket_acl" "website_bucket" {
-  count = (var.use_external_bucket == false ? 1 : 0)
+resource "aws_s3_bucket_ownership_controls" "website_bucket" {
+  count  = (var.use_external_bucket == false ? 1 : 0)
+  bucket = aws_s3_bucket.website_bucket[0].id
 
-  bucket = aws_s3_bucket.website_bucket[0].bucket
+  rule {
+    object_ownership = "BucketOwnerEnforced"
+  }
+}
 
-  acl = "private"
+resource "aws_s3_bucket_public_access_block" "website_bucket" {
+  count  = (var.use_external_bucket == false ? 1 : 0)
+  bucket = aws_s3_bucket.website_bucket[0].id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
 }
 
 resource "aws_s3_bucket_website_configuration" "website_bucket" {
@@ -98,11 +109,47 @@ resource "aws_s3_bucket_versioning" "website_bucket" {
 
 resource "aws_s3_bucket_policy" "website_bucket_policy" {
   bucket = data.aws_s3_bucket.website_bucket.id
-  policy = data.aws_iam_policy_document.s3_policy.json
+  policy = var.use_oai ? data.aws_iam_policy_document.s3_policy_oai[0].json : data.aws_iam_policy_document.s3_policy_oac[0].json
 }
 
+resource "aws_cloudfront_origin_access_control" "origin_access_control" {
+  count                             = var.use_oai ? 0 : 1
+  name                              = "${data.aws_caller_identity.current-account.account_id}-${var.service_name}-oac"
+  description                       = "Origin access control for S3 static site"
+  origin_access_control_origin_type = "s3"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
+
+# OAI (optional legacy)
 resource "aws_cloudfront_origin_access_identity" "origin_access_identity" {
+  count   = (var.use_oai || var.keep_oai_for_migration) ? 1 : 0
   comment = "origin access identity for s3/cloudfront"
+}
+
+resource "aws_cloudfront_cache_policy" "static_site_cache_policy" {
+  name        = "${data.aws_caller_identity.current-account.account_id}-${var.service_name}-policy"
+  comment     = "Cache policy for static site"
+  default_ttl = var.cache_default_ttl
+  max_ttl     = var.cache_max_ttl
+  min_ttl     = var.cache_min_ttl
+
+  parameters_in_cache_key_and_forwarded_to_origin {
+    cookies_config {
+      cookie_behavior = "none"
+    }
+
+    headers_config {
+      header_behavior = "none"
+    }
+
+    query_strings_config {
+      query_string_behavior = "none"
+    }
+
+    enable_accept_encoding_gzip   = true
+    enable_accept_encoding_brotli = true
+  }
 }
 
 resource "aws_cloudfront_distribution" "s3_distribution" {
@@ -112,10 +159,17 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
 
   origin {
     domain_name = data.aws_s3_bucket.website_bucket.bucket_regional_domain_name
-    origin_id   = aws_cloudfront_origin_access_identity.origin_access_identity.id
+    origin_id   = "S3-${data.aws_s3_bucket.website_bucket.id}"
 
-    s3_origin_config {
-      origin_access_identity = aws_cloudfront_origin_access_identity.origin_access_identity.cloudfront_access_identity_path
+    # For OAC (default): set origin_access_control_id
+    origin_access_control_id = var.use_oai ? null : aws_cloudfront_origin_access_control.origin_access_control[0].id
+
+    # For OAI (legacy): include s3_origin_config
+    dynamic "s3_origin_config" {
+      for_each = var.use_oai ? [1] : []
+      content {
+        origin_access_identity = aws_cloudfront_origin_access_identity.origin_access_identity[0].cloudfront_access_identity_path
+      }
     }
   }
 
@@ -126,6 +180,12 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
 
   custom_error_response {
     error_code         = 404
+    response_code      = 200
+    response_page_path = "/index.html"
+  }
+
+  custom_error_response {
+    error_code         = 403
     response_code      = 200
     response_page_path = "/index.html"
   }
@@ -146,36 +206,18 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
       "HEAD",
     ]
 
-    target_origin_id = aws_cloudfront_origin_access_identity.origin_access_identity.id
+    target_origin_id = "S3-${data.aws_s3_bucket.website_bucket.id}"
 
-    forwarded_values {
-      query_string = false
-
-      cookies {
-        forward = "none"
-      }
-    }
-
+    cache_policy_id        = aws_cloudfront_cache_policy.static_site_cache_policy.id
     viewer_protocol_policy = "redirect-to-https"
-    min_ttl                = 0
-    default_ttl            = 0
-    max_ttl                = 0
-
-    dynamic "function_association" {
-      for_each = aws_cloudfront_function.default_object_mapper
-
-      content {
-        event_type   = "viewer-request"
-        function_arn = function_association.value.arn
-      }
-    }
   }
 
-  price_class = "PriceClass_200"
+  price_class = var.cloudfront_price_class
 
   viewer_certificate {
     acm_certificate_arn = aws_acm_certificate.cert_website.arn
     ssl_support_method  = "sni-only"
+	minimum_protocol_version = var.minimum_protocol_version
   }
 
   restrictions {
@@ -183,15 +225,6 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
       restriction_type = "none"
     }
   }
-}
-
-resource "aws_cloudfront_function" "default_object_mapper" {
-  count   = var.enable_directory_index ? 1 : 0
-  name    = "DefaultObjectMapper"
-  runtime = "cloudfront-js-1.0"
-  comment = "Appends 'index.html' to requested URL if it ends in / or is missing file ending"
-  publish = true
-  code    = file("${path.module}/default_index_mapper.js")
 }
 
 resource "aws_route53_record" "www_a" {
@@ -206,25 +239,37 @@ resource "aws_route53_record" "www_a" {
   }
 }
 
-data "aws_iam_policy_document" "s3_policy" {
+# OAC-style policy (default)
+data "aws_iam_policy_document" "s3_policy_oac" {
+  count = var.use_oai ? 0 : 1
+
   statement {
+    sid       = "AllowCloudFrontReadOAC"
     actions   = ["s3:GetObject"]
     resources = ["${data.aws_s3_bucket.website_bucket.arn}/*"]
-
     principals {
-      type        = "AWS"
-      identifiers = [aws_cloudfront_origin_access_identity.origin_access_identity.iam_arn]
+      type        = "Service"
+      identifiers = ["cloudfront.amazonaws.com"]
     }
-  }
-
-  statement {
-    actions   = ["s3:ListBucket"]
-    resources = [data.aws_s3_bucket.website_bucket.arn]
-
-    principals {
-      type        = "AWS"
-      identifiers = [aws_cloudfront_origin_access_identity.origin_access_identity.iam_arn]
+    condition {
+      test     = "StringEquals"
+      variable = "AWS:SourceArn"
+      values   = [aws_cloudfront_distribution.s3_distribution.arn]
     }
   }
 }
 
+# OAI-style policy (legacy)
+data "aws_iam_policy_document" "s3_policy_oai" {
+  count = var.use_oai ? 1 : 0
+
+  statement {
+    sid       = "AllowOAIRead"
+    actions   = ["s3:GetObject"]
+    resources = ["${data.aws_s3_bucket.website_bucket.arn}/*"]
+    principals {
+      type        = "AWS"
+      identifiers = [aws_cloudfront_origin_access_identity.origin_access_identity[0].iam_arn]
+    }
+  }
+}

@@ -1,15 +1,18 @@
-# ------------------------------------------------------------------------------
-# Variables
-# ------------------------------------------------------------------------------
-variable "name_prefix" {
-  description = "A prefix used for naming resources."
+variable "service_name" {
+  description = "The name of the service using this module."
   type        = string
 }
 
-variable "bucket_versioning" {
-  description = "(Optional) Enable versioning. Once you version-enable a bucket, it can never return to an unversioned state. You can, however, suspend versioning on that bucket."
+variable "use_oai" {
+  description = "Use legacy CloudFront Origin Access Identity (OAI) instead of OAC. Default false (OAC)."
   type        = bool
-  default     = true
+  default     = false
+}
+
+variable "keep_oai_for_migration" {
+  description = "Keeps the OAI resource so Terraform does not delete it during OAC migration."
+  type        = bool
+  default     = false
 }
 
 variable "tags" {
@@ -47,8 +50,32 @@ variable "certificate_validation_timeout" {
   default     = "45m"
 }
 
-variable "enable_directory_index" {
-  description = "(Optional) Map URIs ending in / or without a file ending to 'index.html'"
-  type        = bool
-  default     = false
+variable "cloudfront_price_class" {
+  description = "The price class for CloudFront distribution. Options: PriceClass_All, PriceClass_200, PriceClass_100"
+  type        = string
+  default     = "PriceClass_100"
+}
+
+variable "cache_min_ttl" {
+  description = "Minimum cache time to live in seconds"
+  type        = number
+  default     = 0
+}
+
+variable "cache_default_ttl" {
+  description = "Default cache time to live in seconds"
+  type        = number
+  default     = 3600
+}
+
+variable "cache_max_ttl" {
+  description = "Maximum cache time to live in seconds"
+  type        = number
+  default     = 86400
+}
+
+variable "minimum_protocol_version" {
+  description = "The minimum SSL/TLS protocol that CloudFront will use to communicate with viewers."
+  type        = string
+  default     = "TLSv1.2_2021"
 }
