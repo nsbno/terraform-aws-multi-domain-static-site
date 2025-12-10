@@ -1,0 +1,95 @@
+= Multi-Domain Static Site
+:!toc-title:
+:!toc-placement:
+:toc:
+
+Host static frontend applications on AWS using CloudFront and S3.
+
+This module creates a complete infrastructure for hosting static sites including ACM certificates, CloudFront distribution with Origin Access Control (OAC), and optionally an S3 bucket.
+
+toc::[]
+
+== Usage
+
+Remember to check out the link:variables.tf[*variables*] and link:outputs.tf[*outputs*] to see all options.
+
+IMPORTANT: CloudFront distributions can take 15-30 minutes to deploy or update.
+
+=== Basic Usage
+
+[source,hcl]
+----
+module "static_site" {
+  source = "github.com/nsbno/terraform-aws-multi-domain-static-site?ref=x.y.z"
+
+  service_name = "petstore"
+
+  domain_name = {
+    name = "petstore.test.infrademo.vydev.io"
+    zone = data.aws_route53_zone.main.name
+  }
+}
+----
+
+See the link:examples/basic/main.tf[full basic example here].
+
+=== External Bucket
+
+[source,hcl]
+----
+module "static_site" {
+  source = "github.com/nsbno/terraform-aws-multi-domain-static-site?ref=x.y.z"
+
+  service_name = "petstore"
+
+  domain_name = {
+    name = "petstore.test.infrademo.vydev.io"
+    zone = data.aws_route53_zone.main.name
+  }
+
+  use_external_bucket = true
+  website_bucket      = aws_s3_bucket.existing.id
+}
+----
+
+== Examples
+
+These examples show you how to use this module in different configurations.
+
+=== link:examples/basic[Basic]
+
+A simple single-domain static site setup.
+
+=== link:examples/multi-domain[Multi-Domain]
+
+Using multiple domains with subject alternative names (SANs).
+
+=== link:examples/external-bucket[External Bucket]
+
+Bring your own S3 bucket instead of creating a new one.
+
+=== link:examples/custom-cache[Custom Cache]
+
+Configure cache TTL settings and CloudFront price class.
+
+== Upgrading from V1
+
+V1 of this module uses Origin Access Identity (OAI) for CloudFront to access the S3 bucket. +
+V2 uses the newer Origin Access Control (OAC) which provides better security and performance.
+
+To upgrade from V1 to V2, follow these steps:
+
+- Add this variable to the module:
+
+[source]
+----
+keep_oai_for_migration = true
+----
+
+and run Terraform apply once to create the OAC while keeping the OAI for migration.
+
+- Remove or set variable to false:
+[source]
+----
+keep_oai_for_migration = false
+----
