@@ -173,6 +173,18 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
     }
   }
 
+  dynamic "origin" {
+    for_each = var.preview_url_module != null ? [1] : []
+    content {
+      domain_name = "${var.preview_url_module.preview_bucket_name}.s3.us-east-1.amazonaws.com"
+      origin_id   = "S3-Preview-${var.preview_url_module.preview_bucket_name}"
+
+      s3_origin_config {
+        origin_access_identity = var.preview_url_module.cloudfront_oai_path
+      }
+    }
+  }
+
   enabled             = true
   is_ipv6_enabled     = true
   default_root_object = "index.html"
@@ -210,6 +222,14 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
 
     cache_policy_id        = aws_cloudfront_cache_policy.static_site_cache_policy.id
     viewer_protocol_policy = "redirect-to-https"
+
+    dynamic "function_association" {
+      for_each = var.preview_url_module != null ? [1] : []
+      content {
+        event_type   = "viewer-request"
+        function_arn = var.preview_url_module.cloudfront_function_arn
+      }
+    }
   }
 
   price_class = var.cloudfront_price_class

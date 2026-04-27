@@ -33,3 +33,8 @@ output "certificate_arn" {
   value       = aws_acm_certificate.cert_website.arn
 }
 
+output "cloudfront_hosted_zone_id" {
+  description = "The CloudFront Route 53 zone ID for use in alias records"
+  value       = aws_cloudfront_distribution.s3_distribution.hosted_zone_id
+}
+
