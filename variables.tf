@@ -79,15 +79,3 @@ variable "minimum_protocol_version" {
   type        = string
   default     = "TLSv1.2_2021"
 }
-
-variable "preview_url_module" {
-  description = "Preview URL module outputs (from terraform-aws-preview-url-spa). Set to enable preview URL support."
-  type = object({
-    preview_bucket_name     = string
-    preview_bucket_arn      = string
-    cloudfront_function_arn = string
-    cloudfront_oai_path     = string
-    cloudfront_oai_iam_arn  = string
-  })
-  default = null
-}
