@@ -33,3 +33,8 @@ output "certificate_arn" {
   value       = aws_acm_certificate.cert_website.arn
 }
 
+output "service_name" {
+  description = "The service name provided as input (useful for referencing in other modules)"
+  value       = var.service_name
+}
+
