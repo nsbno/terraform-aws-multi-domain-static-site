@@ -80,7 +80,7 @@ variable "minimum_protocol_version" {
   default     = "TLSv1.2_2021"
 }
 
-variable "compress" {
+variable "compression_enabled" {
   description = "Whether CloudFront should automatically compress (gzip/brotli) text-based responses. Default false to keep existing behavior."
   type        = bool
   default     = false

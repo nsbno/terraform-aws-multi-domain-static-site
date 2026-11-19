@@ -210,7 +210,7 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
 
     cache_policy_id        = aws_cloudfront_cache_policy.static_site_cache_policy.id
     viewer_protocol_policy = "redirect-to-https"
-    compress               = var.compress
+    compress               = var.compression_enabled
   }
 
   price_class = var.cloudfront_price_class
