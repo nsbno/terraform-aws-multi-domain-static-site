@@ -85,3 +85,18 @@ variable "compression_enabled" {
   type        = bool
   default     = false
 }
+
+variable "response_headers_policy_id" {
+  description = "Optional ID of a CloudFront response headers policy to attach to the default cache behavior."
+  type        = string
+  default     = null
+}
+
+variable "ordered_cache_behaviors" {
+  description = "Optional extra cache behaviors for specific path patterns (e.g. /assets/*), evaluated before the default behavior. They reuse the module's cache policy and S3 origin."
+  type = list(object({
+    path_pattern               = string
+    response_headers_policy_id = optional(string)
+  }))
+  default = []
+}

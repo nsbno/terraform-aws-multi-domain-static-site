@@ -211,14 +211,31 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
     cache_policy_id        = aws_cloudfront_cache_policy.static_site_cache_policy.id
     viewer_protocol_policy = "redirect-to-https"
     compress               = var.compression_enabled
+
+    response_headers_policy_id = var.response_headers_policy_id
+  }
+
+  dynamic "ordered_cache_behavior" {
+    for_each = var.ordered_cache_behaviors
+    content {
+      path_pattern           = ordered_cache_behavior.value.path_pattern
+      allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+      cached_methods         = ["GET", "HEAD"]
+      target_origin_id       = "S3-${data.aws_s3_bucket.website_bucket.id}"
+      cache_policy_id        = aws_cloudfront_cache_policy.static_site_cache_policy.id
+      viewer_protocol_policy = "redirect-to-https"
+      compress               = var.compression_enabled
+
+      response_headers_policy_id = ordered_cache_behavior.value.response_headers_policy_id
+    }
   }
 
   price_class = var.cloudfront_price_class
 
   viewer_certificate {
-    acm_certificate_arn = aws_acm_certificate.cert_website.arn
-    ssl_support_method  = "sni-only"
-	minimum_protocol_version = var.minimum_protocol_version
+    acm_certificate_arn      = aws_acm_certificate.cert_website.arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = var.minimum_protocol_version
   }
 
   restrictions {
